@@ -1,6 +1,7 @@
 {
     "name": "apteles/framework",
     "type": "library",
+    "description": "The Laravel Framework.",
     "require-dev": {
         "phpunit/phpunit": "^8.5",
         "spatie/phpunit-watcher": "^1.21"
