@@ -4,7 +4,9 @@
     "description": "The Laravel Framework.",
     "require-dev": {
         "phpunit/phpunit": "^8.5",
-        "spatie/phpunit-watcher": "^1.21"
+        "spatie/phpunit-watcher": "^1.21",
+        "friendsofphp/php-cs-fixer": "^2.16",
+        "phpstan/phpstan": "^0.12.3"
     },
     "authors": [
         {
@@ -17,12 +19,16 @@
     },
     "autoload": {
         "psr-4": {
-            "ApTeles\\":"src"
+            "ApTeles\\": "src"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "ApTeles\\Tests":"tests"
+            "ApTeles\\Tests\\": "tests"
         }
+    },
+    "scripts": {
+        "test": "phpunit tests --testdox",
+        "test:watch": "phpunit-watcher watch"
     }
 }
