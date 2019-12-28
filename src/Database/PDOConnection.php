@@ -22,9 +22,15 @@ class PDOConnection extends Connection implements ConnectionInterface
         $credentials = $this->parseCredentials($this->credentials);
 
         try {
-            $this->connection = new PDO(...$credentials);
+            $this->connection = new PDO(
+                $credentials[0],
+                $credentials[1],
+                $credentials[2],
+                [PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES 'utf8'"]
+            );
             $this->connection->setAttribute(PDO::ATTR_ERRMODE, pdo::ERRMODE_EXCEPTION);
             $this->connection->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, $this->credentials['default_fetch']);
+            $this->connection->setAttribute(PDO::MYSQL_ATTR_INIT_COMMAND, "SET NAMES 'utf8'");
         } catch (\Throwable $th) {
             throw new RuntimeException($th->getMessage());
         }
