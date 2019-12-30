@@ -21,7 +21,10 @@ class RecordTest extends TestCase
 
     public function testItCanDeleteData()
     {
-        $this->markTestSkipped('miss implement method delete');
+        $personEntity = new Person;
+        $person = $personEntity->load(4);
+        $result = $person->remove();
+        $this->assertTrue((bool) $result);
     }
 
     public function testItCanLoadAllDataFromDatabase()
