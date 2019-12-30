@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace ApTeles\Database;
+namespace ApTeles\Database\Connector;
 
 use InvalidArgumentException;
 use ApTeles\Database\Contracts\ConnectionInterface;

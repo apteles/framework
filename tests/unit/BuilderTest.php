@@ -101,7 +101,7 @@ class BuilderTest extends TestCase
     {
         $mockBuilder = $this->getMockBuilder(QueyBuilder::class)->setMethods(['runQuery'])->getMock();
 
-        $mockBuilder->expects($this->once())->method('runQuery')->willReturn(QueyBuilder::class);
+        $mockBuilder->expects($this->once())->method('runQuery')->willReturn($this->builder);
 
         $mockBuilder->runQuery();
     }

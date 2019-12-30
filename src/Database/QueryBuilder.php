@@ -8,8 +8,9 @@ use Exception;
 use PDOStatement;
 use InvalidArgumentException;
 use ApTeles\Database\Contracts\ConnectionInterface;
+use ApTeles\Database\Contracts\QueryBuilderInterface;
 
-class QueyBuilder
+class QueyBuilder implements QueryBuilderInterface
 {
     /**
      *
@@ -79,25 +80,25 @@ class QueyBuilder
         $this->connection = $conn->getConnection();
     }
 
-    public function table(string $table): self
+    public function table(string $table): QueryBuilderInterface
     {
         $this->table = $table;
 
         return $this;
     }
 
-    public function select(array $fields = ['*']): self
+    public function select(array $fields = ['*']): QueryBuilderInterface
     {
         $this->operation = self::DML_SELECT;
 
         foreach ($fields as $field) {
-            $this->fields[] = "`{$field}`";
+            $this->fields[] = $field;
         }
 
         return $this;
     }
 
-    public function create(array $data): self
+    public function create(array $data): QueryBuilderInterface
     {
         $this->fields = '`' . \implode('`,`', \array_keys($data)) . '`';
         $this->placeholders = $this->generatePlaceHolder($data)->transform();
@@ -111,7 +112,7 @@ class QueyBuilder
         return $this;
     }
 
-    public function update(array $data)
+    public function update(array $data): QueryBuilderInterface
     {
         $this->operation = self::DML_UPDATE;
 
@@ -122,13 +123,13 @@ class QueyBuilder
         return $this;
     }
 
-    public function delete(): self
+    public function delete(): QueryBuilderInterface
     {
         $this->operation = self::DML_DELETE;
         return $this;
     }
 
-    public function where(string $column, string $operator = self::OPERATORS[0], string $value= null)
+    public function where(string $column, string $operator = self::OPERATORS[0], string $value= null): QueryBuilderInterface
     {
         if (!\in_array($operator, self::OPERATORS, true)) {
             if (!\is_null($value)) {
@@ -216,13 +217,13 @@ class QueyBuilder
     {
         switch ($type) {
             case self::DML_SELECT:
-                return \sprintf("SELECT %s FROM `%s`", $this->getFields(), $this->getTable());
+                return \sprintf("SELECT %s FROM %s", $this->getFields(), $this->getTable());
             case self::DML_DELETE:
                 return \sprintf("DELETE FROM `%s`", $this->getTable());
             case self::DML_INSERT:
                 return \sprintf("INSERT INTO %s (%s) VALUES %s", $this->getTable(), $this->fields, $this->placeholders);
             case self::DML_UPDATE:
-                return \sprintf("UPDATE `%s` SET %s", $this->getTable(), $this->getFields());
+                return \sprintf("UPDATE %s SET %s", $this->getTable(), $this->getFields());
         }
     }
 
@@ -242,7 +243,20 @@ class QueyBuilder
         return $query;
     }
 
-    public function execute(object $statement)
+    public function execute(object $statement): PDOStatement
+    {
+        if ($this->hasBindings()) {
+            return  $this->executeQueryWithBindings($statement);
+        }
+        return $this->executeQueryWithoutBindings($statement);
+    }
+
+    private function hasBindings(): bool
+    {
+        return \count($this->bindings) > 0;
+    }
+
+    private function executeQueryWithBindings(PDOStatement $statement): PDOStatement
     {
         $statement->execute($this->getBindings());
 
@@ -251,18 +265,31 @@ class QueyBuilder
         return $statement;
     }
 
-    public function runQuery()
+    private function executeQueryWithoutBindings(PDOStatement $statement): PDOStatement
+    {
+        $statement->execute();
+
+        $this->clearBindingsAndPlaceHolders();
+
+        return $statement;
+    }
+
+    public function runQuery(): QueryBuilderInterface
     {
         $query = $this->prepare($this->dump());
-
 
         $this->statement = $this->execute($query);
         return $this;
     }
 
-    public function get()
+    public function get(): array
     {
-        return $this->statement->fetchAll();
+        return $this->fetchIntoCollection();
+    }
+
+    public function first(): object
+    {
+        return $this->get()[0] ?? null;
     }
 
     public function count(): int
@@ -296,11 +323,15 @@ class QueyBuilder
         $this->connection->rollback();
     }
 
-    public function fetchInto(string $className = 'stdClass')
+    public function fetchIntoCollection(string $className = 'stdClass'): array
     {
         return $this->statement->fetchAll(PDO::FETCH_CLASS, $className);
     }
 
+    public function fetchOneObjectBy(string $className = 'stdClas')
+    {
+        return $this->statement->fetchObject($className);
+    }
     public function getTable(): string
     {
         if (!$this->table) {
