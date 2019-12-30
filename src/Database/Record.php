@@ -11,16 +11,27 @@ use ApTeles\Database\Contracts\QueryBuilderInterface;
 abstract class Record implements PersistenceInterface
 {
     /**
-     * table name
      *
      * @var string
      */
     protected $table;
 
+    /**
+     *
+     * @var array
+     */
     protected $data = [];
 
+    /**
+     * Temporary data for update operations
+     * @var array
+     */
     protected $dataTemp = [];
 
+    /**
+     *
+     * @return QueryBuilderInterface
+     */
     public function getQueryBuilder(): QueryBuilderInterface
     {
         // $options = [
@@ -49,12 +60,22 @@ abstract class Record implements PersistenceInterface
         return $builder;
     }
 
+    /**
+     *
+     * @param array $data
+     * @return integer
+     */
     public function update(array $data): int
     {
         $this->dataTemp = $data;
         return $this->store();
     }
 
+    /**
+     *
+     * @param array $data
+     * @return integer
+     */
     public function create(array $data): int
     {
         $this->hydrate($data);
@@ -62,6 +83,10 @@ abstract class Record implements PersistenceInterface
         return $this->store();
     }
 
+    /**
+     *
+     * @return integer
+     */
     public function store(): int
     {
         if (!$this->idOrDataAlreadyExists()) {
@@ -83,6 +108,10 @@ abstract class Record implements PersistenceInterface
                      ->count();
     }
 
+    /**
+     *
+     * @return boolean
+     */
     public function idOrDataAlreadyExists(): bool
     {
         if (
@@ -95,7 +124,12 @@ abstract class Record implements PersistenceInterface
         return true;
     }
 
-    public function load(int $id)
+    /**
+     *
+     * @param integer $id
+     * @return void
+     */
+    public function load(int $id): object
     {
         $result = $this->getQueryBuilder()
                     ->table($this->getEntity())
@@ -111,7 +145,12 @@ abstract class Record implements PersistenceInterface
         throw new Exception("Data id: {$id} not found");
     }
 
-    public function remove(?int $id = null)
+    /**
+     *
+     * @param integer|null $id
+     * @return integer
+     */
+    public function remove(?int $id = null): int
     {
         $id = $this->idIsFilled((string) $id);
 
@@ -122,6 +161,10 @@ abstract class Record implements PersistenceInterface
                        ->count();
     }
 
+    /**
+     *
+     * @return array
+     */
     public function all(): array
     {
         return $this->getQueryBuilder()
@@ -131,16 +174,30 @@ abstract class Record implements PersistenceInterface
                                 ->fetchIntoCollection(\get_class($this));
     }
 
+    /**
+     *
+     * @return array
+     */
     public function toArray(): array
     {
         return $this->data;
     }
 
+    /**
+     *
+     * @param array $data
+     * @return void
+     */
     public function fill(array $data): void
     {
         $this->hydrate($data);
     }
 
+    /**
+     *
+     * @param array $data
+     * @return void
+     */
     private function hydrate(array $data): void
     {
         if ($this->data) {
@@ -152,8 +209,17 @@ abstract class Record implements PersistenceInterface
         return;
     }
 
+    /**
+     *
+     * @param string|null $property
+     * @param string|null $value
+     */
     public function __set(?string $property, ?string $value)
     {
+        /**
+         * This method must be refactored, there ara a lot of logic
+         * inside here.
+         */
         $method = "define{$property}";
         if (\method_exists($this, $method)) {
             \call_user_func([$this, $method], $value);
@@ -166,8 +232,18 @@ abstract class Record implements PersistenceInterface
         }
     }
 
+    /**
+     *
+     * @param string $property
+     * @return void
+     */
     public function __get(string $property)
     {
+        /**
+         * This method must be refactored, there ara a lot of logic
+         * inside here.
+         */
+
         $method = "retive{$property}";
         if (\method_exists($this, $method)) {
             \call_user_func([$this, $method]);
@@ -176,12 +252,21 @@ abstract class Record implements PersistenceInterface
         return $this->getProperty($property);
     }
 
+    /**
+     *
+     * @param string $perperty
+     * @return void
+     */
     private function resetProperty(string $perperty): void
     {
-        unset($this->data['id']);
+        unset($this->data[$perperty]);
     }
 
-    public function getEntity()
+    /**
+     *
+     * @return string
+     */
+    public function getEntity(): string
     {
         $className = \get_called_class();
         if (!$this->table) {
@@ -191,24 +276,48 @@ abstract class Record implements PersistenceInterface
         return $this->table;
     }
 
+    /**
+     *
+     * @param string $property
+     * @return string|null
+     */
     private function getProperty(string $property): ?string
     {
         return $this->data[$property] ?? null;
     }
 
+    /**
+     *
+     * @return void
+     */
     public function __clone()
     {
         $this->resetProperty('id');
     }
 
+    /**
+     *
+     * @param string $id
+     * @return string
+     */
     private function idIsFilled(string $id): string
     {
+        /**
+         * This method must be reviewed, its name is not
+         * clear;
+         *
+         */
         if (empty($id)) {
             return $this->getProperty('id');
         }
         return $id;
     }
 
+    /**
+     *
+     * @param [type] $property
+     * @return boolean
+     */
     public function __isset($property)
     {
         return isset($this->data[$property]);
