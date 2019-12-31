@@ -18,6 +18,8 @@
     </testsuites>
     <php>
         <const name="PHPUNIT_RUNNING" value="true" />
+        <server name="PATH_INFO" value="/" />
+        <server name="REQUEST_METHOD" value="GET" />
     </php>
 
 </phpunit>
