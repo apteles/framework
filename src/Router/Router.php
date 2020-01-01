@@ -7,7 +7,7 @@ use Exception;
 use RuntimeException;
 use ApTeles\Router\Exceptions\HttpException;
 
-class Router
+class Router implements RouterInterface
 {
     private const HOME = '/';
 
