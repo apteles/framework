@@ -6,6 +6,8 @@ namespace ApTeles\Core;
 use ApTeles\Router\Router;
 use ApTeles\Http\Responder;
 use Composer\Autoload\ClassLoader;
+use ApTeles\Router\RouterInterface;
+use ApTeles\Http\ResponderInterface;
 use Psr\Container\ContainerInterface;
 
 class Application
