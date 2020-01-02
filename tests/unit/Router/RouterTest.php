@@ -69,10 +69,12 @@ class RouterTest extends TestCase
         $foo = $parseUriRegexPattern->invokeArgs($this->router, ["/^\/foo$/",'/foo']);
         $bar = $parseUriRegexPattern->invokeArgs($this->router, ["/^\/bar\/(\d+)$/",'/bar/10']);
         $barFoo = $parseUriRegexPattern->invokeArgs($this->router, ["/^\/bar\/(\d+)\/foo\/(\d+)$/",'/bar/10/foo/20']);
-
+        
         $this->assertEmpty($foo);
         $this->assertCount(1, $bar);
+        $this->assertEquals(["10"], $bar);
         $this->assertCount(2, $barFoo);
+        $this->assertEquals(["10","20"], $barFoo);
     }
 
     public function testItCanParseMethod()
