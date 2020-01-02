@@ -29,9 +29,12 @@ class Router implements RouterInterface
     public function run()
     {
         foreach ($this->getRoutes() as $route => $action) {
-            if ($params = $this->parseUriRegexPattern($route, $this->uri()) !== false) {
+            $params = $this->parseUriRegexPattern($route, $this->uri());
+            if (!empty($params)) {
                 return $action($params);
             }
+
+            return $action();
         }
 
         throw new HttpException('Page not found.', HttpStatus::NOT_FOUND);
@@ -59,11 +62,12 @@ class Router implements RouterInterface
 
     private function parseUriRegexPattern(string $route, string $uri): array
     {
-        if ($result = \preg_match($route, $uri, $params)) {
+        \preg_match($route, $uri, $params);
+
+        if ($this->extractOnlyParams($params)) {
             return $this->extractOnlyParams($params);
         }
-
-        return $result;
+        return [];
     }
 
     public function extractOnlyParams($params): array
