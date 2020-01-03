@@ -4,10 +4,9 @@ declare(strict_types=1);
 namespace ApTeles\Http;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Contracts\Service\ResetInterface;
 use Symfony\Component\HttpFoundation\Response;
 
-class Responder implements ResetInterface
+class Responder implements ResponderInterface
 {
     public function __invoke($action, $params)
     {
