@@ -69,7 +69,7 @@ class RouterTest extends TestCase
         $foo = $parseUriRegexPattern->invokeArgs($this->router, ["/^\/foo$/",'/foo']);
         $bar = $parseUriRegexPattern->invokeArgs($this->router, ["/^\/bar\/(\d+)$/",'/bar/10']);
         $barFoo = $parseUriRegexPattern->invokeArgs($this->router, ["/^\/bar\/(\d+)\/foo\/(\d+)$/",'/bar/10/foo/20']);
-        
+
         $this->assertEmpty($foo);
         $this->assertCount(1, $bar);
         $this->assertEquals(["10"], $bar);
@@ -113,6 +113,34 @@ class RouterTest extends TestCase
 
         $result = $this->router->run();
 
-        $this->assertEquals('foo', $result);
+        $this->assertArrayHasKey('invoker', $result);
+        $this->assertArrayHasKey('action', $result);
+        $this->assertArrayHasKey('params', $result);
+
+        $this->assertEquals('foo', $result['invoker']->call($result['action'], $result['params']));
+    }
+
+    public function testItCanRunRoutePassingArgumentLikeCallable()
+    {
+        $this->router->add('get', '/', [FooController::class, 'index']);
+
+        $result = $this->router->run();
+
+        if (!\method_exists($result['invoker'], 'call')) {
+            $result = $result['invoker']($result['action'], null, null, $result['params']);
+            $this->assertEquals([10,20], $result);
+        }
+
+        $result = $result['invoker']->call($result['action'], $result['params']);
+
+        $this->assertEquals([10,20], $result);
+    }
+}
+
+class FooController
+{
+    public function index()
+    {
+        return [10,20];
     }
 }

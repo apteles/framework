@@ -4,14 +4,29 @@ declare(strict_types=1);
 namespace ApTeles\Router;
 
 use Exception;
+use Invoker\Invoker;
 use RuntimeException;
+use Psr\Container\ContainerInterface;
+use Psr\Http\Message\ResponseInterface;
 use ApTeles\Router\Exceptions\HttpException;
+use Invoker\ParameterResolver\ResolverChain;
+use Psr\Http\Message\ServerRequestInterface;
+use Invoker\ParameterResolver\TypeHintResolver;
+use Invoker\ParameterResolver\DefaultValueResolver;
+use Invoker\ParameterResolver\AssociativeArrayResolver;
 
 class Router implements RouterInterface
 {
     private const HOME = '/';
 
     private $routes = [];
+
+    private $container = null;
+
+    public function setContainer(ContainerInterface $container = null)
+    {
+        $this->container = $container;
+    }
 
     public function add(string $method, string $pattern, callable $callback): void
     {
@@ -30,11 +45,33 @@ class Router implements RouterInterface
     {
         foreach ($this->getRoutes() as $route => $action) {
             $params = $this->parseUriRegexPattern($route, $this->uri());
-            if (!empty($params)) {
-                return $action($params);
+
+            if (!$this->container) {
+                $invoker = new Invoker(null, $this->container);
+
+                return [
+                    'invoker' => $invoker,
+                    'params' => $params,
+                    'action' => $action
+                ];
             }
 
-            return $action();
+            $resolvers = [
+                new AssociativeArrayResolver(),
+                new TypeHintResolver($this->container),
+                new DefaultValueResolver,
+            ];
+
+            $invoker = new Invoker(new ResolverChain($resolvers), $this->container);
+
+            return [
+                'invoker' => new ControllerInvoker(
+                    $invoker,
+                    $this->container->get(ServerRequestInterface::class),
+                    $this->container->get(ResponseInterface::class)
+                ),
+                'params' => $params,
+                'action' => $action];
         }
 
         throw new HttpException('Page not found.', HttpStatus::NOT_FOUND);
