@@ -28,7 +28,7 @@ class Application
      *
      * @var array
      */
-    private $modules;
+    private $modules = [];
 
     /**
      *
@@ -47,8 +47,6 @@ class Application
         $this->settings = $settings;
 
         $this->composer = $composer;
-
-        $this->init();
     }
 
     /**
@@ -88,7 +86,7 @@ class Application
     public function getResponder(): ResponderInterface
     {
         if (!$this->container->has(ResponderInterface::class)) {
-            $this->container->set(ResponderInterface::class, new Responder);
+            $this->container->set(ResponderInterface::class, new Responder($this->container));
         }
 
         return $this->container->get(ResponderInterface::class);
@@ -101,7 +99,9 @@ class Application
     public function getRouter(): RouterInterface
     {
         if (!$this->container->has(RouterInterface::class)) {
-            $this->container->set(RouterInterface::class, new Router);
+            $router = new Router;
+            $router->setContainer($this->container);
+            $this->container->set(RouterInterface::class, $router);
         }
 
         return $this->container->get(RouterInterface::class);
@@ -112,11 +112,13 @@ class Application
      * @param array $modules
      * @return void
      */
-    public function defineModules(array $modules): void
+    public function defineModules(array $modules): self
     {
         foreach ($modules as $file => $module) {
             $this->modules[$file] = $module;
         }
+
+        return $this;
     }
 
     /**
@@ -140,5 +142,18 @@ class Application
         }
 
         $registry->run();
+    }
+
+    public function dispatch()
+    {
+        $responder = $this->getResponder();
+        $router = $this->getRouter();
+        $proccessed = $router->run();
+ 
+        $responder(
+            $proccessed['invoker'],
+            $proccessed['action'],
+            $proccessed['params']
+        );
     }
 }
