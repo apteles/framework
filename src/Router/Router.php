@@ -7,10 +7,8 @@ use Exception;
 use Invoker\Invoker;
 use RuntimeException;
 use Psr\Container\ContainerInterface;
-use Psr\Http\Message\ResponseInterface;
 use ApTeles\Router\Exceptions\HttpException;
 use Invoker\ParameterResolver\ResolverChain;
-use Psr\Http\Message\ServerRequestInterface;
 use Invoker\ParameterResolver\TypeHintResolver;
 use Invoker\ParameterResolver\DefaultValueResolver;
 use Invoker\ParameterResolver\AssociativeArrayResolver;
@@ -44,34 +42,32 @@ class Router implements RouterInterface
     public function run()
     {
         foreach ($this->getRoutes() as $route => $action) {
-            $params = $this->parseUriRegexPattern($route, $this->uri());
-
-            if (!$this->container) {
+            $result = $this->parseUriRegexPattern($route, $this->uri());
+            
+            if (!$this->container && $result['isValidRoute']) {
                 $invoker = new Invoker(null, $this->container);
 
                 return [
                     'invoker' => $invoker,
-                    'params' => $params,
+                    'params' => $result['params'],
                     'action' => $action
                 ];
             }
 
-            $resolvers = [
-                new AssociativeArrayResolver(),
-                new TypeHintResolver($this->container),
-                new DefaultValueResolver,
-            ];
+            if ($result['isValidRoute']) {
+                $resolvers = [
+                    new AssociativeArrayResolver(),
+                    new TypeHintResolver($this->container),
+                    new DefaultValueResolver,
+                ];
 
-            $invoker = new Invoker(new ResolverChain($resolvers), $this->container);
+                $invoker = new Invoker(new ResolverChain($resolvers), $this->container);
 
-            return [
-                'invoker' => new ControllerInvoker(
-                    $invoker,
-                    $this->container->get(ServerRequestInterface::class),
-                    $this->container->get(ResponseInterface::class)
-                ),
-                'params' => $params,
-                'action' => $action];
+                return [
+                    'invoker' => new ControllerInvoker($invoker),
+                    'params' => $result['params'],
+                    'action' => $action];
+            }
         }
 
         throw new HttpException('Page not found.', HttpStatus::NOT_FOUND);
@@ -99,12 +95,14 @@ class Router implements RouterInterface
 
     private function parseUriRegexPattern(string $route, string $uri): array
     {
-        \preg_match($route, $uri, $params);
-
+        $isValidRoute = \preg_match($route, $uri, $params);
         if ($this->extractOnlyParams($params)) {
-            return $this->extractOnlyParams($params);
+            return[
+                'isValidRoute' => $isValidRoute,
+                'params' => $this->extractOnlyParams($params)
+            ];
         }
-        return [];
+        return ['isValidRoute' => $isValidRoute, 'params' =>[]];
     }
 
     public function extractOnlyParams($params): array
