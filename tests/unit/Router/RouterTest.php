@@ -1,6 +1,8 @@
 <?php
 namespace ApTeles\Tests\Router;
 
+use Exception;
+use RuntimeException;
 use ApTeles\Router\Router;
 use PHPUnit\Framework\TestCase;
 use ApTeles\Tests\Helpers\Helper;
@@ -17,33 +19,57 @@ class RouterTest extends TestCase
     {
         $this->router = new Router;
     }
-    public function testItCanGetURI()
-    {
-        $this->assertEquals('/', $this->router->uri());
-    }
-
     public function testItCanAddRoutes()
     {
-        $this->router->add('get', '/foo', function () {
+        $this->router->add('get', '/users/edit/(\d+)', function () {
             print 'foo';
         });
 
-        $this->router->add('get', '/bar', function () {
-            print 'bar';
-        });
+        $this->router->run('get', '/users/edit/10');
 
-        $this->assertCount(2, $this->router->getRoutes());
+        $this->assertCount(1, $this->router->getRoutes());
     }
 
-    public function testItShouldBeCallable()
+    public function testItShouldReturnArrayWithCallableInvokerAndParams()
     {
-        $this->router->add('get', '/foo', function () {
-            print 'foo';
+        $this->router->group('/admin', function (Router $route) {
+            $route->add('GET', '/manager/users/(\d+)', function ($p) {
+                return 'foo ' . $p;
+            });
         });
 
-        foreach ($this->router->getRoutes() as $route) {
-            $this->assertIsCallable($route);
-        }
+        $result = $this->router->run('get', '/admin/manager/users/10');
+        $this->assertArrayHasKey('invoker', $result);
+        $this->assertArrayHasKey('action', $result);
+        $this->assertArrayHasKey('params', $result);
+    }
+
+    public function testItShouldGroupRoute()
+    {
+        $this->router->group('/admin', function (Router $route) {
+            $route->add('GET', '/manager/users', function () {
+                return 'foo';
+            });
+        });
+
+        $result = $this->router->run('get', '/admin/manager/users');
+
+        $expected = $result['invoker']->call($result['action']);
+
+        $this->assertEquals('foo', $expected);
+    }
+
+    public function testItCanCreateRouteAndReceiveParams()
+    {
+        $this->router->add('GET', '/edit/user/(\d+)', function ($id) {
+            return 'foo ' . $id;
+        });
+
+        $result = $this->router->run('get', '/edit/user/10');
+
+        $expected = $result['invoker']->call($result['action'], $result['params']);
+
+        $this->assertEquals('foo 10', $expected);
     }
 
     public function testItShouldConvertUriToValidRegexPattern()
@@ -62,6 +88,7 @@ class RouterTest extends TestCase
         $this->assertRegExp($fooBar, '/bar/slug');
     }
 
+
     public function testItCanParseURIRegexAndReturnParams()
     {
         $parseUriRegexPattern = Helper::turnMethodPublic(Router::class, 'parseUriRegexPattern');
@@ -70,11 +97,13 @@ class RouterTest extends TestCase
         $bar = $parseUriRegexPattern->invokeArgs($this->router, ["/^\/bar\/(\d+)$/",'/bar/10']);
         $barFoo = $parseUriRegexPattern->invokeArgs($this->router, ["/^\/bar\/(\d+)\/foo\/(\d+)$/",'/bar/10/foo/20']);
 
-        $this->assertEmpty($foo);
-        $this->assertCount(1, $bar);
-        $this->assertEquals(["10"], $bar);
+        $this->assertArrayHasKey('isValidRoute', $foo);
+        $this->assertArrayHasKey('params', $foo);
+        $this->assertEmpty($foo['params']);
+        $this->assertCount(1, $bar['params']);
+        $this->assertEquals("10", $bar['params'][0]);
         $this->assertCount(2, $barFoo);
-        $this->assertEquals(["10","20"], $barFoo);
+        $this->assertEquals(["10","20"], $barFoo['params']);
     }
 
     public function testItCanParseMethod()
@@ -95,14 +124,25 @@ class RouterTest extends TestCase
     {
         $getCurrentMethodInRequest = Helper::turnMethodPublic(Router::class, 'getCurrentMethodInRequest');
 
+        $this->router->add('get', '/', function () {
+            return 'foo';
+        });
+        $this->router->run('get', '/');
+
         $foo = $getCurrentMethodInRequest->invokeArgs($this->router, []);
-        $bar = $getCurrentMethodInRequest->invokeArgs($this->router, []);
-        $fooBar = $getCurrentMethodInRequest->invokeArgs($this->router, []);
         $expected = 'get';
 
         $this->assertEquals($expected, $foo);
-        $this->assertEquals($expected, $bar);
-        $this->assertEquals($expected, $fooBar);
+
+        $this->router->add('post', '/', function () {
+            return 'bar';
+        });
+        $this->router->run('post', '/');
+
+        $foo = $getCurrentMethodInRequest->invokeArgs($this->router, []);
+        $expected = 'post';
+
+        $this->assertEquals($expected, $foo);
     }
 
     public function testItCanRunRoutes()
@@ -111,7 +151,7 @@ class RouterTest extends TestCase
             return 'foo';
         });
 
-        $result = $this->router->run();
+        $result = $this->router->run('get', '/');
 
         $this->assertArrayHasKey('invoker', $result);
         $this->assertArrayHasKey('action', $result);
@@ -124,7 +164,7 @@ class RouterTest extends TestCase
     {
         $this->router->add('get', '/', [FooController::class, 'index']);
 
-        $result = $this->router->run();
+        $result = $this->router->run('get', '/');
 
         if (!\method_exists($result['invoker'], 'call')) {
             $result = $result['invoker']($result['action'], null, null, $result['params']);
@@ -134,6 +174,72 @@ class RouterTest extends TestCase
         $result = $result['invoker']->call($result['action'], $result['params']);
 
         $this->assertEquals([10,20], $result);
+    }
+
+    public function testItCanGetRouteByName()
+    {
+        $this->router->add('get', '/users/edit/(\d+)/name/(\w+)/group/(\d+)', function () {
+            print 'foo';
+        }, 'users.some.thing.else.edit');
+
+        $this->router->add('get', '/bar/baz', function () {
+            print 'barBaz';
+        }, 'bar.baz');
+
+        $result = $this->router->route('users.some.thing.else.edit', [10,'slug', 20]);
+        $this->assertEquals('/users/edit/10/name/slug/group/20', $result);
+
+        $result2 = $this->router->route('bar.baz');
+        $this->assertEquals('/bar/baz', $result2);
+    }
+
+    public function testItCanThrowAnErrorIfRunWithoutDefineRoutes()
+    {
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('Route not defined yet.');
+
+        $this->router->run('GET', '/home');
+    }
+
+    public function testItCanDefineMultiplesGroupRoutes()
+    {
+        $this->router->group('/admin', function (Router $router) {
+            $router->add('GET', '/groups', function () {
+                return '/admin/groups';
+            });
+        });
+
+        $this->router->group('/customer', function (Router $router) {
+            $router->add('GET', '/cart', function () {
+                return '/customer/cart';
+            });
+        });
+
+        $dispatched = $this->router->run('GET', '/admin/groups');
+
+        $result = $dispatched['invoker']->call($dispatched['action'], $dispatched['params']);
+
+        $this->assertEquals("/admin/groups", $result);
+
+        $dispatched = $this->router->run('GET', '/customer/cart');
+
+        $result = $dispatched['invoker']->call($dispatched['action'], $dispatched['params']);
+
+        $this->assertEquals("/customer/cart", $result);
+    }
+
+    public function testItShouldThrowErrorIfRouteDoesNotMatchWithAnyPattern()
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Route /admin/grouped not found.');
+
+        $this->router->group('/admin', function (Router $router) {
+            $router->add('GET', '/groups', function () {
+                return '/admin/groups';
+            });
+        });
+
+        $this->router->run('GET', '/admin/grouped');
     }
 }
 

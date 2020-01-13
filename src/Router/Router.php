@@ -7,7 +7,6 @@ use Exception;
 use Invoker\Invoker;
 use RuntimeException;
 use Psr\Container\ContainerInterface;
-use ApTeles\Router\Exceptions\HttpException;
 use Invoker\ParameterResolver\ResolverChain;
 use Invoker\ParameterResolver\TypeHintResolver;
 use Invoker\ParameterResolver\DefaultValueResolver;
@@ -21,14 +20,40 @@ class Router implements RouterInterface
 
     private $container = null;
 
+    private $currentPrefix = '';
+
+    private $uri;
+
+    private $currentMethod;
+
     public function setContainer(ContainerInterface $container = null)
     {
         $this->container = $container;
     }
 
-    public function add(string $method, string $pattern, callable $callback): void
+    public function group(string $prefix, callable $callback): void
     {
-        $this->routes[$this->parseMethod($method)][$this->transformUriTORegexPattern($pattern)] = $callback;
+        $previousPrefix = $this->currentPrefix;
+        $this->currentPrefix = $previousPrefix . $prefix;
+        $callback($this);
+        $this->currentPrefix = $previousPrefix;
+    }
+
+    public function add(string $method, string $pattern, callable $callback, string $name = ''): void
+    {
+        $pattern = $this->currentPrefix . $pattern;
+
+        $route = [
+            'method' => $this->parseMethod($method),
+            'route' => [
+                'regex' => $this->transformUriTORegexPattern($pattern),
+                'raw' => $this->transformUriTOStringFormatted($pattern)
+            ],
+            'name' => $name,
+            'callback' => $callback
+        ];
+
+        $this->routes[] = $route;
     }
 
     public function getRoutes(): array
@@ -36,56 +61,92 @@ class Router implements RouterInterface
         if (!$this->routes) {
             throw new Exception("Route not defined yet.");
         }
-        return $this->routes[$this->getCurrentMethodInRequest()];
+        return $this->routes;
     }
 
-    public function run()
+    public function route(string $name, array $params = [])
     {
-        foreach ($this->getRoutes() as $route => $action) {
-            $result = $this->parseUriRegexPattern($route, $this->uri());
-            
-            if (!$this->container && $result['isValidRoute']) {
-                $invoker = new Invoker(null, $this->container);
+        foreach ($this->routes as  $route) {
+            if ($name === $route['name']) {
+                return \vsprintf($route['route']['raw'], $params);
+            }
+        }
+    }
 
-                return [
+    public function run(string $httpMethod, string $currentURI)
+    {
+        $this->setMethod($httpMethod);
+        $this->setURI($currentURI);
+
+        foreach ($this->getRoutes() as  $route) {
+            [
+                'method' => $httpVerb,
+                'route' => $route,
+                'callback' => $callback
+            ] = $route;
+
+            if ($this->parseMethod($httpVerb) === $this->parseMethod($httpMethod)) {
+                $result = $this->parseUriRegexPattern($route['regex'], $this->uri());
+
+                if (!$this->container && $result['isValidRoute']) {
+                    $invoker = new Invoker(null, $this->container);
+
+                    return [
                     'invoker' => $invoker,
                     'params' => $result['params'],
-                    'action' => $action
+                    'action' => $callback
                 ];
-            }
+                }
 
-            if ($result['isValidRoute']) {
-                $resolvers = [
+                if ($result['isValidRoute']) {
+                    $resolvers = [
                     new AssociativeArrayResolver(),
                     new TypeHintResolver($this->container),
                     new DefaultValueResolver,
                 ];
 
-                $invoker = new Invoker(new ResolverChain($resolvers), $this->container);
+                    $invoker = new Invoker(new ResolverChain($resolvers), $this->container);
 
-                return [
+                    return [
                     'invoker' => new ControllerInvoker($invoker),
                     'params' => $result['params'],
-                    'action' => $action];
+                    'action' => $callback];
+                }
             }
         }
 
-        throw new HttpException('Page not found.', HttpStatus::NOT_FOUND);
+        throw new RuntimeException("Route {$this->uri()} not found.");
+    }
+
+    private function setURI(string $uri): void
+    {
+        $this->uri = $uri;
     }
 
     public function uri(): string
     {
-        $currentURI = $_SERVER['PATH_INFO'] ?? self::HOME;
-
-        if (!$this->isHome($currentURI)) {
-            return \rtrim($currentURI, '/');
+        if (!$this->isHome($this->uri)) {
+            $this->uri = \rtrim($this->uri, '/');
+            return $this->uri;
         }
-        return $currentURI;
+        return $this->uri;
+    }
+
+    private function setMethod(string $method): void
+    {
+        $this->currentMethod = $method;
     }
 
     public function isHome($url): bool
     {
         return $url === self::HOME;
+    }
+
+    public function transformUriTOStringFormatted($routeRaw):string
+    {
+        $rawRoute = \str_replace('(\d+)', '%d', $routeRaw);
+        $rawRoute = \str_replace('(\w+)', '%s', $rawRoute);
+        return $rawRoute;
     }
 
     private function transformUriTORegexPattern(string $string): string
@@ -96,6 +157,7 @@ class Router implements RouterInterface
     private function parseUriRegexPattern(string $route, string $uri): array
     {
         $isValidRoute = \preg_match($route, $uri, $params);
+
         if ($this->extractOnlyParams($params)) {
             return[
                 'isValidRoute' => $isValidRoute,
@@ -113,8 +175,8 @@ class Router implements RouterInterface
 
     private function getCurrentMethodInRequest(): string
     {
-        if (isset($_SERVER['REQUEST_METHOD'])) {
-            return $this->parseMethod($_SERVER['REQUEST_METHOD']);
+        if ($this->currentMethod) {
+            return $this->parseMethod($this->currentMethod);
         }
         throw new RuntimeException("Index 'REQUEST_METHOD' not defined in global server ");
     }
