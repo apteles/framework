@@ -2,9 +2,8 @@
 declare(strict_types=1);
 namespace ApTeles\Database;
 
-use PDO;
 use Exception;
-use ApTeles\Database\Connector\ConnectionFactory;
+use ApTeles\Database\Contracts\ConnectionInterface;
 use ApTeles\Database\Contracts\PersistenceInterface;
 use ApTeles\Database\Contracts\QueryBuilderInterface;
 
@@ -30,32 +29,26 @@ abstract class Record implements PersistenceInterface
 
     /**
      *
+     * @var ConnectionInterface
+     */
+    // protected $conn;
+
+    // public function setConnection(ConnectionInterface $conn)
+    // {
+    //     $this->conn = $conn;
+    //     return $this;
+    // }
+
+    abstract protected function connection(): ConnectionInterface;
+
+    /**
+     *
      * @return QueryBuilderInterface
      */
     public function getQueryBuilder(): QueryBuilderInterface
     {
-        // $options = [
-        //     'driver'    => 'mysql',
-        //     'host'    => '127.0.0.1',
-        //     'port'    => '3306',
-        //     'db_name'    => 'bug_report_testing',
-        //     'username'    => 'root',
-        //     'password'    => 'secret',
-        //     'default_fetch' => PDO::FETCH_CLASS
-
-        // ];
-
-        $options = [
-            'driver'    => 'sqlite',
-            'file'          => __DIR__ . '/../../tests/database/fixture.sqlite',
-            'username'    => '',
-            'password'    => '',
-            'default_fetch' => PDO::FETCH_CLASS
-
-        ];
-
         $builder = new QueyBuilder;
-        $builder->setConnection(ConnectionFactory::make($options['driver'], $options));
+        $builder->setConnection($this->connection());
 
         return $builder;
     }
@@ -136,7 +129,7 @@ abstract class Record implements PersistenceInterface
                       ->select()
                        ->where('id', '=', (string) $id)
                         ->runQuery()
-                          ->fetchOneObjectBy(\get_class($this));
+                        ->fetchOneObjectBy(\get_class($this));
 
         if ($result) {
             $this->fill($result->toArray());
@@ -171,7 +164,7 @@ abstract class Record implements PersistenceInterface
                     ->table($this->getEntity())
                         ->select()
                             ->runQuery()
-                                ->fetchIntoCollection(\get_class($this));
+                                ->fetchIntoCollection(\get_class($this)); //
     }
 
     /**
@@ -214,7 +207,7 @@ abstract class Record implements PersistenceInterface
      * @param string|null $property
      * @param string|null $value
      */
-    public function __set(?string $property, ?string $value)
+    public function __set(?string $property, $value)
     {
         /**
          * This method must be refactored, there ara a lot of logic
@@ -224,11 +217,7 @@ abstract class Record implements PersistenceInterface
         if (\method_exists($this, $method)) {
             \call_user_func([$this, $method], $value);
         } else {
-            if (\is_null($value)) {
-                $this->resetProperty($property);
-            } else {
-                $this->data[$property] = $value;
-            }
+            $this->data[$property] = $value;
         }
     }
 
@@ -243,10 +232,10 @@ abstract class Record implements PersistenceInterface
          * This method must be refactored, there ara a lot of logic
          * inside here.
          */
-
-        $method = "retive{$property}";
+        $propertyMethod = ucfirst($property);
+        $method = "retrive{$propertyMethod}";
         if (\method_exists($this, $method)) {
-            \call_user_func([$this, $method]);
+            return \call_user_func([$this, $method]);
         }
 
         return $this->getProperty($property);
@@ -281,7 +270,7 @@ abstract class Record implements PersistenceInterface
      * @param string $property
      * @return string|null
      */
-    private function getProperty(string $property): ?string
+    private function getProperty(string $property)
     {
         return $this->data[$property] ?? null;
     }
