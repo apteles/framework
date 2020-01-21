@@ -2,11 +2,12 @@
 declare(strict_types=1);
 namespace ApTeles\Database\Connector;
 
+use ApTeles\Database\Contracts\ConnectionInterface;
 use Exception;
 
 class ConnectionFactory
 {
-    public static function make(string $type, array $options)
+    public static function make(string $type, array $options): ConnectionInterface
     {
         return self::createConnectionType($type, $options);
     }
