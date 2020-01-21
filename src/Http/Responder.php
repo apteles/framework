@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace ApTeles\Http;
 
+use App\Module\Contracts\ViewInterface;
 use Psr\Container\ContainerInterface;
 
 class Responder implements ResponderInterface
@@ -22,7 +23,38 @@ class Responder implements ResponderInterface
         $response = $this->createResponse();
 
 
+        $middleware = function ($request, $response) {
+            $view = $this->container->get(ViewInterface::class);
+            if (isset($_SESSION['old'])) {
+                $view->addGlobal('old', $_SESSION['old']);
+            }
+
+            $_SESSION['old'] = $request->request->all();
+
+            return $response;
+        };
+
+        $middleware2 = function ($request, $response) {
+            $view = $this->container->get(ViewInterface::class);
+            if (isset($_SESSION['messages'])) {
+                $view->addGlobal('messages', $_SESSION['messages']);
+                unset($_SESSION['messages']);
+            }
+            return $response;
+        };
+
+        
+        $response = $middleware($request, $response);
+        $response = $middleware2($request, $response);
+
         $response = $invoker($action, $request, $response);
+
+        // $middleware = function ($request, $response) {
+        //     var_dump($_SESSION['old']);
+        //     return $response;
+        // };
+        //$response = $middleware($request, $response);
+
         return $response->send();
     }
 
